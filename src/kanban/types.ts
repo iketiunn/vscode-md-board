@@ -22,9 +22,3 @@ export type BoardPayload = {
 	columns: string[];
 	cards: WebviewCard[];
 };
-
-export type WebviewMessage = {
-	type?: string;
-	id?: string;
-	status?: string;
-};

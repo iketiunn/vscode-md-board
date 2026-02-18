@@ -85,7 +85,9 @@ npm run compile
 - `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/panel.ts`: webview panel lifecycle + message handling
 - `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/data.ts`: markdown scan + frontmatter normalization
 - `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/markdownStatus.ts`: safe status write-back
-- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/webview/html.ts`: webview UI
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/webview/html.ts`: webview HTML shell + CSP
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/webview/main.tsx`: Preact board UI
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/webview/styles.css`: static webview styles
 
 ## Known Limitations
 

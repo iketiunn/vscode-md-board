@@ -57,6 +57,7 @@
     "typescript-eslint": "^8.54.0"
   },
   "dependencies": {
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "preact": "^10.28.3"
   }
 }

@@ -3,19 +3,22 @@ import * as vscode from 'vscode';
 import { PANEL_VIEW_TYPE } from './constants';
 import { loadCards, toBoardPayload } from './data';
 import { updateCardStatus } from './markdownStatus';
-import { WebviewMessage } from './types';
+import { WebviewToHostMessage } from './webview/protocol';
 import { getWebviewHtml } from './webview/html';
 
 export async function openFolderAsKanban(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<void> {
 	const folderName = path.basename(folderUri.fsPath);
 	let previewColumn: vscode.ViewColumn | undefined;
+	const webviewDistUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview');
+	const webviewScriptUri = vscode.Uri.joinPath(webviewDistUri, 'app.js');
+	const webviewStyleUri = vscode.Uri.joinPath(webviewDistUri, 'app.css');
 	const panel = vscode.window.createWebviewPanel(
 		PANEL_VIEW_TYPE,
 		`Kanban: ${folderName}`,
 		vscode.ViewColumn.Active,
 		{
 			enableScripts: true,
-			localResourceRoots: [folderUri],
+			localResourceRoots: [folderUri, webviewDistUri],
 		}
 	);
 
@@ -26,7 +29,12 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 	};
 
 	const initialCards = await loadCards(folderUri);
-	panel.webview.html = getWebviewHtml(panel.webview, toBoardPayload(initialCards, folderUri));
+	panel.webview.html = getWebviewHtml(
+		panel.webview,
+		toBoardPayload(initialCards, folderUri),
+		webviewScriptUri,
+		webviewStyleUri
+	);
 
 	const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folderUri, '*.md'));
 	const refreshOnFsChange = () => {
@@ -40,14 +48,14 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 	context.subscriptions.push(watcher);
 	panel.onDidDispose(() => watcher.dispose());
 
-	panel.webview.onDidReceiveMessage(async (message: WebviewMessage) => {
-		if (message.type === 'moveCard' && message.id && typeof message.status === 'string') {
+	panel.webview.onDidReceiveMessage(async (message: WebviewToHostMessage) => {
+		if (message.type === 'moveCard') {
 			await updateCardStatus(message.id, message.status);
 			await refresh();
 			return;
 		}
 
-		if (message.type === 'openCard' && message.id) {
+		if (message.type === 'openCard') {
 			if (!previewColumn) {
 				const panelColumn = panel.viewColumn;
 				previewColumn = panelColumn ? ((panelColumn + 1) as vscode.ViewColumn) : vscode.ViewColumn.Beside;
@@ -61,7 +69,7 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 			});
 		}
 
-		if (message.type === 'editCard' && message.id) {
+		if (message.type === 'editCard') {
 			const fileUri = vscode.Uri.file(message.id);
 			const document = await vscode.workspace.openTextDocument(fileUri);
 			await vscode.window.showTextDocument(document, {
