@@ -21,4 +21,19 @@ export type EditCardMessage = {
 	id: string;
 };
 
-export type WebviewToHostMessage = MoveCardMessage | OpenCardMessage | EditCardMessage;
+export type CreateCardMessage = {
+	type: 'createCard';
+	status: string;
+};
+
+export type DeleteCardMessage = {
+	type: 'deleteCard';
+	id: string;
+};
+
+export type WebviewToHostMessage =
+	| MoveCardMessage
+	| OpenCardMessage
+	| EditCardMessage
+	| CreateCardMessage
+	| DeleteCardMessage;

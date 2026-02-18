@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { DEFAULT_STATUS } from '../constants';
 import type { BoardPayload, WebviewCard } from '../types';
 import type { HostToWebviewMessage, WebviewToHostMessage } from './protocol';
 import { BoardColumn } from './components/BoardColumn';
@@ -28,7 +29,14 @@ function App() {
 	const suppressOpenRef = useRef(false);
 
 	const columns = useMemo(
-		() => [...new Set(board.columns.concat(board.cards.map((card) => card.status)))],
+		() => {
+			const combined = [...new Set(board.columns.concat(board.cards.map((card) => card.status)))];
+			if (!combined.includes(DEFAULT_STATUS)) {
+				return combined;
+			}
+
+			return [DEFAULT_STATUS, ...combined.filter((status) => status !== DEFAULT_STATUS)];
+		},
 		[board.columns, board.cards]
 	);
 	const cardsByStatus = useMemo(() => {
@@ -103,6 +111,14 @@ function App() {
 		vscode.postMessage({ type: 'editCard', id: cardId });
 	}, []);
 
+	const deleteCard = useCallback((cardId: string) => {
+		vscode.postMessage({ type: 'deleteCard', id: cardId });
+	}, []);
+
+	const createCard = useCallback((status: string) => {
+		vscode.postMessage({ type: 'createCard', status });
+	}, []);
+
 	const onCardDragStart = useCallback((cardId: string) => {
 		suppressOpenRef.current = true;
 		setDraggingCardId(cardId);
@@ -132,6 +148,8 @@ function App() {
 						onMoveCard={moveCard}
 						onOpenCard={openCard}
 						onEditCard={editCard}
+						onDeleteCard={deleteCard}
+						onCreateCard={createCard}
 						onCardDragStart={onCardDragStart}
 						onCardDragEnd={onCardDragEnd}
 					/>

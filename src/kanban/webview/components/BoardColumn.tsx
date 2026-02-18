@@ -15,6 +15,8 @@ type BoardColumnProps = {
 	onMoveCard: (cardId: string, nextStatus: string) => void;
 	onOpenCard: (cardId: string) => void;
 	onEditCard: (cardId: string) => void;
+	onDeleteCard: (cardId: string) => void;
+	onCreateCard: (status: string) => void;
 	onCardDragStart: (cardId: string) => void;
 	onCardDragEnd: () => void;
 };
@@ -30,6 +32,8 @@ export function BoardColumn({
 	onMoveCard,
 	onOpenCard,
 	onEditCard,
+	onDeleteCard,
+	onCreateCard,
 	onCardDragStart,
 	onCardDragEnd
 }: BoardColumnProps) {
@@ -37,7 +41,12 @@ export function BoardColumn({
 		<section class={`column ${status === DEFAULT_STATUS ? 'column-inbox' : ''}`}>
 			<header class="column-header">
 				<h2>{status}</h2>
-				<span>{cards.length}</span>
+				<div class="column-header-actions">
+					<button class="column-create-button" type="button" onClick={() => onCreateCard(status)}>
+						Create
+					</button>
+					<span>{cards.length}</span>
+				</div>
 			</header>
 			<div
 				class="column-body"
@@ -67,12 +76,13 @@ export function BoardColumn({
 						draggingCardId={draggingCardId}
 						suppressOpenRef={suppressOpenRef}
 						setMenu={setMenu}
-						onMoveCard={onMoveCard}
-						onOpenCard={onOpenCard}
-						onEditCard={onEditCard}
-						onCardDragStart={onCardDragStart}
-						onCardDragEnd={onCardDragEnd}
-					/>
+							onMoveCard={onMoveCard}
+							onOpenCard={onOpenCard}
+							onEditCard={onEditCard}
+							onDeleteCard={onDeleteCard}
+							onCardDragStart={onCardDragStart}
+							onCardDragEnd={onCardDragEnd}
+						/>
 				))}
 			</div>
 		</section>

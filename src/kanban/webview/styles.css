@@ -146,6 +146,35 @@ body.dragging * {
 	background: #e4e4e7;
 }
 
+.column-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.column-create-button {
+	border: 1px solid #d4d4d8;
+	border-radius: 8px;
+	padding: 4px 8px;
+	background: #fafafa;
+	color: #18181b;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.column-create-button:hover {
+	background: #f4f4f5;
+	border-color: #a1a1aa;
+}
+
+.column-create-button:focus-visible {
+	outline: 2px solid #4f46e5;
+	outline-offset: 2px;
+}
+
 .column-body {
 	flex: 1;
 	min-height: 0;
@@ -281,6 +310,15 @@ body.dragging * {
 .menu-item:hover {
 	background: #eef0f9;
 	color: #1f2252;
+}
+
+.menu-item-danger {
+	color: #b42318;
+}
+
+.menu-item-danger:hover {
+	background: #fef3f2;
+	color: #912018;
 }
 
 .menu-item:focus-visible {

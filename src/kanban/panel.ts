@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { PANEL_VIEW_TYPE } from './constants';
+import { DEFAULT_STATUS, PANEL_VIEW_TYPE } from './constants';
 import { loadCards, toBoardPayload } from './data';
 import { updateCardStatus } from './markdownStatus';
 import { WebviewToHostMessage } from './webview/protocol';
@@ -76,6 +76,58 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 				viewColumn: vscode.ViewColumn.Beside,
 				preview: true,
 			});
+			return;
+		}
+
+		if (message.type === 'createCard') {
+			const status = message.status?.trim() || DEFAULT_STATUS;
+			const fileName = await buildUniqueFileName(folderUri, status);
+			const fileUri = vscode.Uri.joinPath(folderUri, fileName);
+			const template = `---\ntitle: "Untitled"\nstatus: ${JSON.stringify(status)}\n---\n\n`;
+
+			await vscode.workspace.fs.writeFile(fileUri, Buffer.from(template, 'utf8'));
+
+			const document = await vscode.workspace.openTextDocument(fileUri);
+			await vscode.window.showTextDocument(document, {
+				viewColumn: vscode.ViewColumn.Beside,
+				preview: false,
+			});
+
+			await refresh();
+			return;
+		}
+
+		if (message.type === 'deleteCard') {
+			const fileUri = vscode.Uri.file(message.id);
+			const fileName = path.basename(fileUri.fsPath);
+			const action = await vscode.window.showWarningMessage(`Delete "${fileName}"?`, { modal: true }, 'Delete');
+			if (action !== 'Delete') {
+				return;
+			}
+
+			await vscode.workspace.fs.delete(fileUri, { useTrash: true });
+			await refresh();
 		}
 	});
+}
+
+async function buildUniqueFileName(folderUri: vscode.Uri, status: string): Promise<string> {
+	const normalized = status
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+	const prefix = normalized.length > 0 ? normalized : 'untitled';
+
+	for (let index = 1; index <= 9999; index += 1) {
+		const suffix = index === 1 ? '' : `-${index}`;
+		const fileName = `${prefix}${suffix}.md`;
+		const fileUri = vscode.Uri.joinPath(folderUri, fileName);
+		try {
+			await vscode.workspace.fs.stat(fileUri);
+		} catch {
+			return fileName;
+		}
+	}
+
+	return `${prefix}-${Date.now()}.md`;
 }

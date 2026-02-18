@@ -14,6 +14,7 @@ type CardItemProps = {
 	onMoveCard: (cardId: string, nextStatus: string) => void;
 	onOpenCard: (cardId: string) => void;
 	onEditCard: (cardId: string) => void;
+	onDeleteCard: (cardId: string) => void;
 	onCardDragStart: (cardId: string) => void;
 	onCardDragEnd: () => void;
 };
@@ -28,6 +29,7 @@ export function CardItem({
 	onMoveCard,
 	onOpenCard,
 	onEditCard,
+	onDeleteCard,
 	onCardDragStart,
 	onCardDragEnd
 }: CardItemProps) {
@@ -196,6 +198,17 @@ export function CardItem({
 						}}
 					>
 						Edit
+					</button>
+					<button
+						type="button"
+						class="menu-item menu-item-danger"
+						role="menuitem"
+						onClick={() => {
+							setMenu(null);
+							onDeleteCard(card.id);
+						}}
+					>
+						Delete
 					</button>
 					<div
 						class="menu-move-wrap"
