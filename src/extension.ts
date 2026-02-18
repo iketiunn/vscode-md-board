@@ -5,23 +5,24 @@ import * as vscode from 'vscode';
 type Card = {
 	id: string;
 	title: string;
+	summary?: string;
 	status: string;
 	filePath: string;
 	assetPath: string;
-	body: string;
 };
 
 type WebviewCard = {
 	id: string;
 	title: string;
+	summary?: string;
 	status: string;
 	filePath: string;
 	assetPath: string;
-	previewImages: string[];
 };
 
 type BoardPayload = {
 	folderPath: string;
+	folderName: string;
 	columns: string[];
 	cards: WebviewCard[];
 };
@@ -64,6 +65,7 @@ async function resolveFolderUri(resource?: vscode.Uri): Promise<vscode.Uri | und
 
 async function openFolderAsKanban(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<void> {
 	const folderName = path.basename(folderUri.fsPath);
+	let cardEditorColumn: vscode.ViewColumn | undefined;
 	const panel = vscode.window.createWebviewPanel(
 		'mdBoardKanban',
 		`Kanban: ${folderName}`,
@@ -96,12 +98,24 @@ async function openFolderAsKanban(context: vscode.ExtensionContext, folderUri: v
 	panel.onDidDispose(() => watcher.dispose());
 
 	panel.webview.onDidReceiveMessage(async (message: { type?: string; id?: string; status?: string }) => {
-		if (message.type !== 'moveCard' || !message.id || typeof message.status !== 'string') {
+		if (message.type === 'moveCard' && message.id && typeof message.status === 'string') {
+			await updateCardStatus(message.id, message.status);
+			await refresh();
 			return;
 		}
 
-		await updateCardStatus(message.id, message.status);
-		await refresh();
+		if (message.type === 'openCard' && message.id) {
+			if (!cardEditorColumn) {
+				const panelColumn = panel.viewColumn;
+				cardEditorColumn = panelColumn ? (panelColumn + 1) as vscode.ViewColumn : vscode.ViewColumn.Beside;
+			}
+
+			const document = await vscode.workspace.openTextDocument(vscode.Uri.file(message.id));
+			await vscode.window.showTextDocument(document, {
+				viewColumn: cardEditorColumn,
+				preview: true,
+			});
+		}
 	});
 }
 
@@ -117,15 +131,16 @@ async function loadCards(folderUri: vscode.Uri): Promise<Card[]> {
 			const parsed = matter(raw);
 
 			const title = normalizeTitle(parsed.data.title, name);
+			const summary = normalizeSummary(parsed.data.summary);
 			const status = normalizeStatus(parsed.data.status);
 
 			return {
 				id: fileUri.fsPath,
 				title,
+				summary,
 				status,
 				filePath: fileUri.fsPath,
 				assetPath: path.dirname(fileUri.fsPath),
-				body: raw,
 			} satisfies Card;
 		})
 	);
@@ -151,6 +166,15 @@ function normalizeStatus(value: unknown): string {
 	return trimmed.length === 0 ? DEFAULT_STATUS : trimmed;
 }
 
+function normalizeSummary(value: unknown): string | undefined {
+	if (typeof value !== 'string') {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+	return trimmed.length === 0 ? undefined : trimmed;
+}
+
 function toBoardPayload(cards: Card[], webview: vscode.Webview, folderUri: vscode.Uri): BoardPayload {
 	const columns = uniqueColumns(cards.map((card) => card.status));
 	if (!columns.includes(DEFAULT_STATUS)) {
@@ -160,14 +184,15 @@ function toBoardPayload(cards: Card[], webview: vscode.Webview, folderUri: vscod
 	const webCards = cards.map((card) => ({
 		id: card.id,
 		title: card.title,
+		summary: card.summary,
 		status: card.status,
 		filePath: card.filePath,
 		assetPath: card.assetPath,
-		previewImages: resolveImageUris(card.body, card.filePath, folderUri, webview),
 	}));
 
 	return {
 		folderPath: folderUri.fsPath,
+		folderName: path.basename(folderUri.fsPath),
 		columns,
 		cards: webCards,
 	};
@@ -182,53 +207,6 @@ function uniqueColumns(statuses: string[]): string[] {
 	}
 
 	return result;
-}
-
-function resolveImageUris(
-	rawMarkdown: string,
-	filePath: string,
-	folderUri: vscode.Uri,
-	webview: vscode.Webview
-): string[] {
-	const images: string[] = [];
-	const imagePattern = /!\[[^\]]*\]\(([^)]+)\)/g;
-
-	for (const match of rawMarkdown.matchAll(imagePattern)) {
-		const rawTarget = stripImageTitle(match[1]);
-		if (!rawTarget) {
-			continue;
-		}
-
-		if (/^https?:\/\//i.test(rawTarget)) {
-			images.push(rawTarget);
-			continue;
-		}
-
-		const relative = rawTarget.replace(/^<|>$/g, '');
-		const decoded = decodeSafe(relative);
-		const normalizedPath = decoded.replace(/\\/g, '/');
-		const absolutePath = normalizedPath.startsWith('/')
-			? path.join(folderUri.fsPath, normalizedPath)
-			: path.resolve(path.dirname(filePath), normalizedPath);
-		const uri = vscode.Uri.file(absolutePath);
-		images.push(webview.asWebviewUri(uri).toString());
-	}
-
-	return images;
-}
-
-function stripImageTitle(raw: string): string {
-	const trimmed = raw.trim();
-	const match = trimmed.match(/^([^\s]+)(?:\s+"[^"]*")?$/);
-	return match ? match[1] : trimmed;
-}
-
-function decodeSafe(value: string): string {
-	try {
-		return decodeURIComponent(value);
-	} catch {
-		return value;
-	}
 }
 
 async function updateCardStatus(filePath: string, nextStatus: string): Promise<void> {
@@ -298,15 +276,15 @@ function getWebviewHtml(webview: vscode.Webview, payload: BoardPayload): string 
     <header class="mb-5 flex items-end justify-between gap-4 border-b border-zinc-300 pb-4">
       <div>
         <p class="text-xs uppercase tracking-[0.28em] text-zinc-500">Markdown Board</p>
-        <h1 class="text-2xl font-semibold md:text-3xl">Folder Kanban</h1>
+        <h1 id="board-title" class="text-2xl font-semibold md:text-3xl"></h1>
       </div>
       <p id="folder-path" class="max-w-[50vw] truncate text-xs text-zinc-500"></p>
     </header>
-    <main id="board" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></main>
+    <main id="board" class="flex gap-4 overflow-x-auto pb-2"></main>
   </div>
 
   <template id="column-template">
-    <section class="flex min-h-[420px] flex-col rounded-2xl border border-zinc-300 bg-white shadow-sm">
+    <section class="flex min-h-[420px] min-w-[320px] max-w-[320px] flex-col rounded-2xl border border-zinc-300 bg-white shadow-sm">
       <header class="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <h2 class="status-name text-sm font-semibold"></h2>
         <span class="count rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium"></span>
@@ -316,10 +294,12 @@ function getWebviewHtml(webview: vscode.Webview, payload: BoardPayload): string 
   </template>
 
   <template id="card-template">
-    <article class="card cursor-grab rounded-xl border border-zinc-300 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing" draggable="true">
-      <p class="title line-clamp-2 text-sm font-medium"></p>
-      <p class="file line-clamp-1 text-xs text-zinc-500"></p>
-      <div class="images mt-2 flex flex-col gap-2"></div>
+    <article class="card cursor-pointer rounded-xl border border-zinc-300 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div class="mb-1 flex items-start justify-between gap-2">
+        <p class="title line-clamp-2 text-sm font-medium"></p>
+        <span class="drag-handle inline-flex h-7 w-7 shrink-0 cursor-move items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-zinc-500 hover:bg-zinc-100" draggable="true" title="Drag to move" aria-label="Drag card">⋮⋮</span>
+      </div>
+      <p class="summary mt-1 line-clamp-3 text-xs text-zinc-700"></p>
     </article>
   </template>
 
@@ -329,11 +309,13 @@ function getWebviewHtml(webview: vscode.Webview, payload: BoardPayload): string 
     const state = ${serialized};
 
     const boardEl = document.getElementById('board');
+    const boardTitleEl = document.getElementById('board-title');
     const folderPathEl = document.getElementById('folder-path');
     const columnTemplate = document.getElementById('column-template');
     const cardTemplate = document.getElementById('card-template');
 
     function render() {
+      boardTitleEl.textContent = state.folderName;
       folderPathEl.textContent = state.folderPath;
       boardEl.innerHTML = '';
 
@@ -358,26 +340,38 @@ function getWebviewHtml(webview: vscode.Webview, payload: BoardPayload): string 
           cardNode.dataset.cardId = card.id;
           cardNode.dataset.status = card.status;
           cardNode.querySelector('.title').textContent = card.title;
-          cardNode.querySelector('.file').textContent = card.filePath;
+          const dragHandle = cardNode.querySelector('.drag-handle');
+          const summaryEl = cardNode.querySelector('.summary');
+          if (card.summary) {
+            summaryEl.textContent = card.summary;
+          } else {
+            summaryEl.remove();
+          }
 
-          const imageHolder = cardNode.querySelector('.images');
-          const preview = card.previewImages.slice(0, 1);
-          preview.forEach((src) => {
-            const image = document.createElement('img');
-            image.src = src;
-            image.className = 'max-h-32 w-full rounded-md border border-zinc-200 object-cover';
-            image.loading = 'lazy';
-            imageHolder.appendChild(image);
-          });
-
-          cardNode.addEventListener('dragstart', (event) => {
+          dragHandle.addEventListener('dragstart', (event) => {
             event.dataTransfer.setData('text/plain', card.id);
             event.dataTransfer.effectAllowed = 'move';
             cardNode.classList.add('opacity-60');
+            cardNode.dataset.dragging = 'true';
           });
 
-          cardNode.addEventListener('dragend', () => {
+          dragHandle.addEventListener('dragend', () => {
             cardNode.classList.remove('opacity-60');
+            setTimeout(() => {
+              delete cardNode.dataset.dragging;
+            }, 0);
+          });
+
+          dragHandle.addEventListener('click', (event) => {
+            event.stopPropagation();
+          });
+
+          cardNode.addEventListener('click', () => {
+            if (cardNode.dataset.dragging === 'true') {
+              return;
+            }
+
+            vscode.postMessage({ type: 'openCard', id: card.id });
           });
 
           dropZone.appendChild(cardNode);
@@ -429,6 +423,7 @@ function getWebviewHtml(webview: vscode.Webview, payload: BoardPayload): string 
       }
 
       state.folderPath = message.payload.folderPath;
+      state.folderName = message.payload.folderName;
       state.columns = message.payload.columns;
       state.cards = message.payload.cards;
       render();
