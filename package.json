@@ -1,7 +1,7 @@
 {
   "name": "md-board",
-  "displayName": "md-board",
-  "description": "open dir as kanban board(temp)",
+  "displayName": "Markdown Board",
+  "description": "Visualize a folder of Markdown files as a Kanban board powered by frontmatter.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.109.0"
@@ -17,7 +17,7 @@
     "commands": [
       {
         "command": "extension.openFolderAsKanban",
-        "title": "Open Folder as Kanban"
+        "title": "Open Folder as Kanban Board"
       }
     ],
     "menus": {

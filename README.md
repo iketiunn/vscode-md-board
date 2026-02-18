@@ -1,71 +1,97 @@
-# md-board README
+# Markdown Board
 
-This is the README for your extension "md-board". After writing up a brief description, we recommend including the following sections.
+Markdown Board is a VS Code extension that turns a folder of Markdown files into a Kanban board.
+
+Each Markdown file is one card. Card position is controlled by YAML frontmatter (`status`).
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Open any folder as a Kanban board from Explorer context menu.
+- Build columns dynamically from unique `status` values.
+- Use `Inbox 📥` automatically when `status` is missing/empty.
+- Drag and drop cards across columns.
+- Move cards via menu (`Edit`, `Move -> <status>`).
+- Click a card to open a Markdown preview in a side pane.
+- Auto-refresh board when Markdown files are created/edited/deleted.
+- Keep Markdown body intact when status is updated.
 
-For example if there is an image subfolder under your extension project workspace:
+## Install
 
-\!\[feature X\]\(images/feature-x.png\)
+### From source
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1. Clone the repo.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Build extension:
+   ```bash
+   npm run compile
+   ```
+4. Press `F5` in VS Code to launch the Extension Development Host.
 
-## Requirements
+## Usage
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1. In VS Code Explorer, right-click a folder.
+2. Click `Open Folder as Kanban Board`.
+3. Interact with cards:
+   - Click card: open Markdown preview in side pane.
+   - Drag card to another column: updates frontmatter `status`.
+   - Use `•••` menu:
+     - `Edit`: open markdown editor.
+     - `Move`: move to another status.
 
-## Extension Settings
+## Card Frontmatter
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+Supported frontmatter fields:
 
-For example:
+- `title`: optional, card title.
+- `summary`: optional, card subtitle text.
+- `status`: optional, board column.
 
-This extension contributes the following settings:
+If `title` is missing, filename is used.
+If `status` is missing/empty, `Inbox 📥` is used.
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+Example:
 
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
+```md
+---
+title: "Kanban Extension MVP"
+summary: "Folder-as-a-card workflow with YAML status"
+status: "In Progress"
 ---
 
-## Following extension guidelines
+Implementation notes...
+```
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+## Example Data
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+Use:
 
-## Working with Markdown
+- `/Users/ike/Code/github.com/iketiunn/md-board/example/personal-board`
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+## Development
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+```bash
+npm run lint
+npm run check-types
+npm run compile
+```
 
-## For more information
+## Architecture (Current)
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/extension.ts`: extension entrypoint
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/command.ts`: command registration
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/panel.ts`: webview panel lifecycle + message handling
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/data.ts`: markdown scan + frontmatter normalization
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/markdownStatus.ts`: safe status write-back
+- `/Users/ike/Code/github.com/iketiunn/md-board/src/kanban/webview/html.ts`: webview UI
 
-**Enjoy!**
+## Known Limitations
+
+- Card scan is non-recursive (`*.md` directly inside selected folder).
+- Remote images are not rendered in card list (by design in current MVP).
+
+## License
+
+MIT (or project default if changed in repository settings).
