@@ -8,7 +8,7 @@ import { getWebviewHtml } from './webview/html';
 
 export async function openFolderAsKanban(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<void> {
 	const folderName = path.basename(folderUri.fsPath);
-	let cardEditorColumn: vscode.ViewColumn | undefined;
+	let previewColumn: vscode.ViewColumn | undefined;
 	const panel = vscode.window.createWebviewPanel(
 		PANEL_VIEW_TYPE,
 		`Kanban: ${folderName}`,
@@ -48,14 +48,24 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 		}
 
 		if (message.type === 'openCard' && message.id) {
-			if (!cardEditorColumn) {
+			if (!previewColumn) {
 				const panelColumn = panel.viewColumn;
-				cardEditorColumn = panelColumn ? ((panelColumn + 1) as vscode.ViewColumn) : vscode.ViewColumn.Beside;
+				previewColumn = panelColumn ? ((panelColumn + 1) as vscode.ViewColumn) : vscode.ViewColumn.Beside;
 			}
 
-			const document = await vscode.workspace.openTextDocument(vscode.Uri.file(message.id));
+			const fileUri = vscode.Uri.file(message.id);
+			await vscode.commands.executeCommand('vscode.openWith', fileUri, 'vscode.markdown.preview.editor', {
+				viewColumn: previewColumn,
+				preview: true,
+				preserveFocus: true,
+			});
+		}
+
+		if (message.type === 'editCard' && message.id) {
+			const fileUri = vscode.Uri.file(message.id);
+			const document = await vscode.workspace.openTextDocument(fileUri);
 			await vscode.window.showTextDocument(document, {
-				viewColumn: cardEditorColumn,
+				viewColumn: vscode.ViewColumn.Beside,
 				preview: true,
 			});
 		}
