@@ -8,28 +8,33 @@ export async function loadCards(folderUri: vscode.Uri): Promise<Card[]> {
 	const entries = await vscode.workspace.fs.readDirectory(folderUri);
 	const mdEntries = entries.filter(([name, type]) => type === vscode.FileType.File && name.toLowerCase().endsWith('.md'));
 
-	const cards = await Promise.all(
+	const maybeCards = await Promise.all(
 		mdEntries.map(async ([name]) => {
 			const fileUri = vscode.Uri.joinPath(folderUri, name);
 			const bytes = await vscode.workspace.fs.readFile(fileUri);
 			const raw = Buffer.from(bytes).toString('utf8');
 			const parsed = matter(raw);
-
-			const title = normalizeTitle(parsed.data.title, name);
+			const title = normalizeTitle(parsed.data.title);
+			if (!title) {
+				return undefined;
+			}
 			const summary = normalizeSummary(parsed.data.summary);
 			const status = normalizeStatus(parsed.data.status);
 
-			return {
+			const card: Card = {
 				id: fileUri.fsPath,
 				title,
-				summary,
 				status,
 				filePath: fileUri.fsPath,
 				assetPath: path.dirname(fileUri.fsPath),
-			} satisfies Card;
+				...(summary ? { summary } : {}),
+			};
+
+			return card;
 		})
 	);
 
+	const cards = maybeCards.filter((card): card is Card => Boolean(card));
 	cards.sort((a, b) => a.title.localeCompare(b.title));
 	return cards;
 }
@@ -55,12 +60,11 @@ export function toBoardPayload(cards: Card[], folderUri: vscode.Uri): BoardPaylo
 	};
 }
 
-function normalizeTitle(value: unknown, fallbackFileName: string): string {
+function normalizeTitle(value: unknown): string | undefined {
 	if (typeof value === 'string' && value.trim().length > 0) {
 		return value.trim();
 	}
-
-	return path.basename(fallbackFileName, path.extname(fallbackFileName));
+	return undefined;
 }
 
 function normalizeStatus(value: unknown): string {
