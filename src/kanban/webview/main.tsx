@@ -138,6 +138,61 @@ function App() {
 		vscode.postMessage({ type: 'moveCard', id: cardId, status: nextStatus });
 	}, []);
 
+	const findCardElement = useCallback((cardId: string): HTMLElement | null => {
+		const cardElements = document.querySelectorAll<HTMLElement>('.card[data-card-id]');
+		for (const element of cardElements) {
+			if (element.dataset.cardId === cardId) {
+				return element;
+			}
+		}
+		return null;
+	}, []);
+
+	const moveCardFromMenu = useCallback((cardId: string, nextStatus: string) => {
+		const card = cardById.get(cardId);
+		if (!card || !nextStatus || card.status === nextStatus) {
+			return;
+		}
+
+		const previousRect = findCardElement(cardId)?.getBoundingClientRect();
+		moveCard(cardId, nextStatus);
+
+		if (!previousRect) {
+			return;
+		}
+
+		window.requestAnimationFrame(() => {
+			const movedElement = findCardElement(cardId);
+			if (!movedElement) {
+				return;
+			}
+
+			const nextRect = movedElement.getBoundingClientRect();
+			const deltaX = previousRect.left - nextRect.left;
+			const deltaY = previousRect.top - nextRect.top;
+			if (deltaX === 0 && deltaY === 0) {
+				return;
+			}
+
+			movedElement.style.transition = 'none';
+			movedElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+			movedElement.style.zIndex = '35';
+			movedElement.getBoundingClientRect();
+
+			movedElement.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
+			movedElement.style.transform = 'translate(0, 0)';
+
+			const cleanup = () => {
+				movedElement.style.transition = '';
+				movedElement.style.transform = '';
+				movedElement.style.zIndex = '';
+			};
+
+			movedElement.addEventListener('transitionend', cleanup, { once: true });
+			window.setTimeout(cleanup, 280);
+		});
+	}, [cardById, findCardElement, moveCard]);
+
 	const openCard = useCallback((cardId: string) => {
 		vscode.postMessage({ type: 'openCard', id: cardId });
 	}, []);
@@ -283,7 +338,7 @@ function App() {
 								draggingColumnStatus={draggingColumnStatus}
 								suppressOpenRef={suppressOpenRef}
 								setMenu={setMenu}
-								onMoveCard={moveCard}
+								onMoveCard={moveCardFromMenu}
 								onOpenCard={openCard}
 								onEditCard={editCard}
 								onDeleteCard={deleteCard}

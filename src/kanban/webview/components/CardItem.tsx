@@ -151,6 +151,7 @@ export function CardItem({
 		<article
 			key={card.id}
 			class={`card ${isMenuOpen ? 'card-menu-open' : ''}`}
+			data-card-id={card.id}
 			ref={setNodeRef}
 			{...draggableAttributes}
 			{...draggableListeners}
