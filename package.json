@@ -1,17 +1,23 @@
 {
   "name": "md-board",
   "displayName": "Markdown Board",
-  "description": "Visualize a folder of Markdown files as a Kanban board powered by frontmatter.",
   "version": "0.0.1",
+  "publisher": "iketiunn",
+  "description": "Visualize a folder of Markdown files as a Kanban board powered by frontmatter.",
+  "author": {
+    "name": "Ike Chang"
+  },
+  "categories": ["Visualization", "Notebooks"],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#C80000",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "activationEvents": ["onCommand:extension.openFolderAsKanban"],
   "engines": {
     "vscode": "^1.109.0"
   },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onCommand:extension.openFolderAsKanban"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -69,5 +75,15 @@
     "@dnd-kit/utilities": "^3.2.2",
     "gray-matter": "^4.0.3",
     "preact": "^10.28.3"
-  }
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/iketiunn/vscode-md-board/issues",
+    "email": "ike.chang@sideeffect.dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iketiunn/vscode-md-board.git"
+  },
+  "homepage": "https://github.com/iketiunn/vscode-md-board/blob/main/README.md"
 }
