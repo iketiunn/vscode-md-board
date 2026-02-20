@@ -6,6 +6,46 @@ import { updateCardStatus } from './markdownStatus';
 import { WebviewToHostMessage } from './webview/protocol';
 import { getWebviewHtml } from './webview/html';
 
+function getColumnOrderKey(folderUri: vscode.Uri): string {
+	return `mdBoard:columnOrder:${folderUri.fsPath}`;
+}
+
+function getDeletedColumnsKey(folderUri: vscode.Uri): string {
+	return `mdBoard:deletedColumns:${folderUri.fsPath}`;
+}
+
+function getPersistedColumnsKey(folderUri: vscode.Uri): string {
+	return `mdBoard:persistedColumns:${folderUri.fsPath}`;
+}
+
+async function readColumnOrder(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<string[] | undefined> {
+	const value = context.workspaceState.get<unknown>(getColumnOrderKey(folderUri));
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+
+	const normalized = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+	return normalized.length > 0 ? normalized : undefined;
+}
+
+async function readDeletedColumns(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<Set<string>> {
+	const value = context.workspaceState.get<unknown>(getDeletedColumnsKey(folderUri));
+	if (!Array.isArray(value)) {
+		return new Set();
+	}
+
+	return new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0));
+}
+
+async function readPersistedColumns(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<string[] | undefined> {
+	const value = context.workspaceState.get<unknown>(getPersistedColumnsKey(folderUri));
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+
+	return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
 export async function openFolderAsKanban(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<void> {
 	const folderName = path.basename(folderUri.fsPath);
 	let previewColumn: vscode.ViewColumn | undefined;
@@ -24,18 +64,42 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 
 	const refresh = async () => {
 		const cards = await loadCards(folderUri);
+		const deletedColumns = await readDeletedColumns(context, folderUri);
+		const persistedColumns = await readPersistedColumns(context, folderUri);
+
+		// Get current columns from cards and merge with persisted
+		const discoveredColumns = [...new Set(cards.map((c) => c.status))];
+		const allColumns = persistedColumns
+			? [...new Set([...persistedColumns, ...discoveredColumns])]
+			: discoveredColumns;
+
+		// Persist the merged column list (so empty columns are kept)
+		await writePersistedColumns(context, folderUri, allColumns);
+
 		const payload = withColumnOrder(
-			toBoardPayload(cards, folderUri),
+			toBoardPayload(cards, folderUri, allColumns, deletedColumns),
 			await readColumnOrder(context, folderUri)
 		);
 		panel.webview.postMessage({ type: 'refresh', payload });
 	};
 
 	const initialCards = await loadCards(folderUri);
+	const deletedColumns = await readDeletedColumns(context, folderUri);
+	const persistedColumns = await readPersistedColumns(context, folderUri);
+
+	// Get current columns from cards and merge with persisted
+	const initialDiscoveredColumns = [...new Set(initialCards.map((c) => c.status))];
+	const initialAllColumns = persistedColumns
+		? [...new Set([...persistedColumns, ...initialDiscoveredColumns])]
+		: initialDiscoveredColumns;
+
+	// Persist the merged column list
+	await writePersistedColumns(context, folderUri, initialAllColumns);
+
 	panel.webview.html = getWebviewHtml(
 		panel.webview,
 		withColumnOrder(
-			toBoardPayload(initialCards, folderUri),
+			toBoardPayload(initialCards, folderUri, initialAllColumns, deletedColumns),
 			await readColumnOrder(context, folderUri)
 		),
 		webviewScriptUri,
@@ -86,7 +150,8 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 		}
 
 		if (message.type === 'createCard') {
-			const status = message.status?.trim() || DEFAULT_STATUS;
+			const columnStatus = message.status?.trim() || DEFAULT_STATUS;
+
 			const title = await vscode.window.showInputBox({
 				title: 'Create Card',
 				prompt: 'Enter a title for the new card.',
@@ -96,6 +161,42 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 			});
 			if (!title) {
 				return;
+			}
+
+			const predefinedStatuses = ['Todo', 'Doing', 'Done'];
+			const quickPickItems: (vscode.QuickPickItem & { status?: string; isCustom?: boolean })[] = [
+				...predefinedStatuses
+					.filter((s) => s !== columnStatus)
+					.map((s) => ({ label: s, status: s })),
+				{ label: columnStatus, status: columnStatus, description: '(current column)' },
+				{ label: '$(add) Create new status', isCustom: true },
+			];
+
+			const selected = await vscode.window.showQuickPick(quickPickItems, {
+				title: 'Select Status',
+				placeHolder: 'Choose a status for the new card',
+				ignoreFocusOut: true,
+			});
+
+			if (!selected) {
+				return;
+			}
+
+			let status: string;
+			if (selected.isCustom) {
+				const customStatus = await vscode.window.showInputBox({
+					title: 'Create New Status',
+					prompt: 'Enter a custom status name.',
+					placeHolder: 'Status name',
+					ignoreFocusOut: true,
+					validateInput: (value) => (value.trim().length > 0 ? null : 'Status is required.'),
+				});
+				if (!customStatus) {
+					return;
+				}
+				status = customStatus.trim();
+			} else {
+				status = selected.status!;
 			}
 
 			const normalizedTitle = title.trim();
@@ -129,26 +230,34 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 
 		if (message.type === 'reorderColumns') {
 			const cards = await loadCards(folderUri);
-			const currentColumns = toBoardPayload(cards, folderUri).columns;
+			const deletedColumns = await readDeletedColumns(context, folderUri);
+			const persistedColumns = await readPersistedColumns(context, folderUri);
+			const currentColumns = toBoardPayload(cards, folderUri, persistedColumns, deletedColumns).columns;
 			const nextOrder = normalizeColumnOrder(message.columns, currentColumns);
 			await writeColumnOrder(context, folderUri, nextOrder);
 			await refresh();
 		}
+
+		if (message.type === 'deleteColumn') {
+			const statusToDelete = message.status;
+			if (statusToDelete === DEFAULT_STATUS) {
+				void vscode.window.showErrorMessage('The Inbox column cannot be deleted.');
+				return;
+			}
+
+			const cards = await loadCards(folderUri);
+			const cardsInColumn = cards.filter((card) => card.status === statusToDelete);
+			if (cardsInColumn.length > 0) {
+				void vscode.window.showWarningMessage(
+					`Cannot delete "${statusToDelete}" column because it contains ${cardsInColumn.length} card(s). Move or delete the cards first.`
+				);
+				return;
+			}
+
+			await removeColumnFromOrder(context, folderUri, statusToDelete);
+			await refresh();
+		}
 	});
-}
-
-function getColumnOrderKey(folderUri: vscode.Uri): string {
-	return `mdBoard:columnOrder:${folderUri.fsPath}`;
-}
-
-async function readColumnOrder(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<string[] | undefined> {
-	const value = context.workspaceState.get<unknown>(getColumnOrderKey(folderUri));
-	if (!Array.isArray(value)) {
-		return undefined;
-	}
-
-	const normalized = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
-	return normalized.length > 0 ? normalized : undefined;
 }
 
 async function writeColumnOrder(
@@ -157,6 +266,39 @@ async function writeColumnOrder(
 	columns: string[]
 ): Promise<void> {
 	await context.workspaceState.update(getColumnOrderKey(folderUri), columns);
+}
+
+async function removeColumnFromOrder(
+	context: vscode.ExtensionContext,
+	folderUri: vscode.Uri,
+	statusToRemove: string
+): Promise<void> {
+	const currentOrder = await readColumnOrder(context, folderUri);
+	if (currentOrder) {
+		const newOrder = currentOrder.filter((s) => s !== statusToRemove);
+		await writeColumnOrder(context, folderUri, newOrder);
+	}
+
+	const deletedKey = getDeletedColumnsKey(folderUri);
+	const deleted = context.workspaceState.get<string[]>(deletedKey) ?? [];
+	if (!deleted.includes(statusToRemove)) {
+		await context.workspaceState.update(deletedKey, [...deleted, statusToRemove]);
+	}
+
+	const persistedKey = getPersistedColumnsKey(folderUri);
+	const persisted = context.workspaceState.get<string[]>(persistedKey) ?? [];
+	const newPersisted = persisted.filter((s) => s !== statusToRemove);
+	if (newPersisted.length !== persisted.length) {
+		await context.workspaceState.update(persistedKey, newPersisted);
+	}
+}
+
+async function writePersistedColumns(
+	context: vscode.ExtensionContext,
+	folderUri: vscode.Uri,
+	columns: string[]
+): Promise<void> {
+	await context.workspaceState.update(getPersistedColumnsKey(folderUri), columns);
 }
 
 function withColumnOrder(payload: ReturnType<typeof toBoardPayload>, savedOrder: string[] | undefined) {

@@ -120,6 +120,7 @@ body.dragging * {
 	border: 1px solid var(--border);
 	border-radius: 16px;
 	box-shadow: var(--shadow);
+	overflow-x: clip;
 }
 
 .column-dragging {
@@ -187,6 +188,7 @@ body.dragging * {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overflow-x: clip;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -287,22 +289,20 @@ body.dragging * {
 	color: #27272a;
 }
 
-.card-menu {
+/* Unified menu base styles */
+.menu {
 	position: absolute;
-	top: 34px;
-	right: 8px;
 	z-index: 60;
-	min-width: 178px;
 	background: var(--panel);
 	border: 1px solid #e4e4e7;
 	border-radius: 12px;
 	padding: 6px;
 	box-shadow: 0 12px 26px rgba(24, 24, 27, 0.14);
 	transform-origin: top right;
-	animation: cardMenuIn 130ms ease-out;
+	animation: menuIn 130ms ease-out;
 }
 
-@keyframes cardMenuIn {
+@keyframes menuIn {
 	from {
 		opacity: 0;
 		transform: translateY(-4px) scale(0.98);
@@ -311,6 +311,15 @@ body.dragging * {
 		opacity: 1;
 		transform: translateY(0) scale(1);
 	}
+}
+
+.card-menu {
+	top: 34px;
+	right: 8px;
+	min-width: 178px;
+	border-radius: 12px;
+	padding: 6px;
+	box-shadow: 0 12px 26px rgba(24, 24, 27, 0.14);
 }
 
 .menu-item {
@@ -371,7 +380,6 @@ body.dragging * {
 	box-shadow: 0 10px 22px rgba(24, 24, 27, 0.12);
 	z-index: 9999;
 	transform-origin: top left;
-	animation: cardMenuIn 140ms ease-out;
 }
 
 .move-submenu[data-horizontal='left'] {
@@ -385,4 +393,41 @@ body.dragging * {
 .move-submenu .menu-item {
 	white-space: nowrap;
 	padding: 7px 10px;
+}
+
+/* Column menu styles */
+.column-menu-wrap {
+	position: relative;
+}
+
+.column-menu-trigger {
+	border: 0;
+	background: transparent;
+	color: #52525b;
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 16px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 140ms ease, color 140ms ease;
+}
+
+.column-menu-trigger:hover {
+	background: #e9e9ef;
+	color: #27272a;
+}
+
+.column-menu-trigger:focus-visible {
+	outline: 2px solid #4f46e5;
+	outline-offset: 2px;
+}
+
+.column-menu {
+	top: calc(100% + 4px);
+	right: 0;
+	min-width: 160px;
 }

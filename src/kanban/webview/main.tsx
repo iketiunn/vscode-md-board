@@ -209,6 +209,10 @@ function App() {
 		vscode.postMessage({ type: 'createCard', status });
 	}, []);
 
+	const deleteColumn = useCallback((status: string) => {
+		vscode.postMessage({ type: 'deleteColumn', status });
+	}, []);
+
 	const onCardDragEnd = useCallback(() => {
 		setDraggingCardId(null);
 		setDragOverlayCard(null);
@@ -343,6 +347,7 @@ function App() {
 								onEditCard={editCard}
 								onDeleteCard={deleteCard}
 								onCreateCard={createCard}
+								onDeleteColumn={status === DEFAULT_STATUS ? undefined : deleteColumn}
 							/>
 						))}
 					</SortableContextCompat>

@@ -36,10 +36,16 @@ export type ReorderColumnsMessage = {
 	columns: string[];
 };
 
+export type DeleteColumnMessage = {
+	type: 'deleteColumn';
+	status: string;
+};
+
 export type WebviewToHostMessage =
 	| MoveCardMessage
 	| OpenCardMessage
 	| EditCardMessage
 	| CreateCardMessage
 	| DeleteCardMessage
-	| ReorderColumnsMessage;
+	| ReorderColumnsMessage
+	| DeleteColumnMessage;

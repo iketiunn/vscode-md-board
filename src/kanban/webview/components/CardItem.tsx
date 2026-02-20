@@ -47,8 +47,8 @@ export function CardItem({
 	const draggableAttributes = attributes as unknown as Record<string, unknown>;
 	const draggableListeners = listeners as Record<string, unknown>;
 	const availableStatuses = columns.filter((value) => value !== card.status);
-	const isMenuOpen = menu?.cardId === card.id;
-	const isMoveOpen = isMenuOpen && Boolean(menu?.submenuOpen);
+	const isMenuOpen = menu?.type === 'card' && menu.cardId === card.id;
+	const isMoveOpen = isMenuOpen && menu.submenuOpen;
 	const canMove = availableStatuses.length > 0;
 	const menuId = `card-menu-${card.id}`;
 	const moveMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -73,17 +73,17 @@ export function CardItem({
 			return;
 		}
 		clearMoveMenuCloseTimer();
-		setMenu({ cardId: card.id, submenuOpen: true });
+		setMenu({ type: 'card', cardId: card.id, submenuOpen: true });
 	}, [canMove, card.id, clearMoveMenuCloseTimer, setMenu]);
 
 	const closeMoveMenuSoon = useCallback(() => {
 		clearMoveMenuCloseTimer();
 		closeMoveMenuTimerRef.current = window.setTimeout(() => {
 			setMenu((current) => {
-				if (!current || current.cardId !== card.id) {
+				if (!current || current.type !== 'card' || current.cardId !== card.id) {
 					return current;
 				}
-				return { cardId: card.id, submenuOpen: false };
+				return { type: 'card', cardId: card.id, submenuOpen: false };
 			});
 			closeMoveMenuTimerRef.current = null;
 		}, 120);
@@ -188,7 +188,7 @@ export function CardItem({
 				aria-controls={menuId}
 				onClick={(event) => {
 					event.stopPropagation();
-					setMenu(isMenuOpen ? null : { cardId: card.id, submenuOpen: false });
+					setMenu(isMenuOpen ? null : { type: 'card', cardId: card.id, submenuOpen: false });
 				}}
 			>
 				•••
@@ -196,7 +196,7 @@ export function CardItem({
 			<p class="card-title">{card.title}</p>
 			{card.summary ? <p class="card-summary">{card.summary}</p> : null}
 			{isMenuOpen ? (
-				<div id={menuId} class="card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
+				<div id={menuId} class="menu card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
 					<button
 						type="button"
 						class="menu-item"
@@ -253,7 +253,7 @@ export function CardItem({
 				? createPortal(
 						<div
 							ref={moveMenuRef}
-							class="move-submenu move-submenu-portal"
+							class="menu move-submenu move-submenu-portal"
 							data-horizontal={moveMenuPosition?.horizontal ?? 'right'}
 							style={
 								moveMenuPosition

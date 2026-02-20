@@ -39,16 +39,33 @@ export async function loadCards(folderUri: vscode.Uri): Promise<Card[]> {
 	return cards;
 }
 
-export function toBoardPayload(cards: Card[], folderUri: vscode.Uri): BoardPayload {
-	const columns = uniqueColumns(cards.map((card) => card.status));
-	if (!columns.includes(DEFAULT_STATUS)) {
-		columns.unshift(DEFAULT_STATUS);
+export function toBoardPayload(
+	cards: Card[],
+	folderUri: vscode.Uri,
+	persistedColumns?: string[],
+	deletedColumns?: Set<string>
+): BoardPayload {
+	// Get columns from current cards
+	const discoveredColumns = uniqueColumns(cards.map((card) => card.status));
+
+	// Merge with persisted columns (to keep empty columns)
+	const allColumns = persistedColumns
+		? mergeColumns(persistedColumns, discoveredColumns)
+		: discoveredColumns;
+
+	if (!allColumns.includes(DEFAULT_STATUS)) {
+		allColumns.unshift(DEFAULT_STATUS);
 	}
+
+	// Filter out deleted columns
+	const filteredColumns = deletedColumns
+		? allColumns.filter((col) => !deletedColumns.has(col))
+		: allColumns;
 
 	return {
 		folderPath: folderUri.fsPath,
 		folderName: path.basename(folderUri.fsPath),
-		columns,
+		columns: filteredColumns,
 		cards: cards.map((card) => ({
 			id: card.id,
 			title: card.title,
@@ -58,6 +75,16 @@ export function toBoardPayload(cards: Card[], folderUri: vscode.Uri): BoardPaylo
 			assetPath: card.assetPath,
 		})),
 	};
+}
+
+function mergeColumns(persisted: string[], discovered: string[]): string[] {
+	const result = [...persisted];
+	for (const col of discovered) {
+		if (!result.includes(col)) {
+			result.push(col);
+		}
+	}
+	return result;
 }
 
 function normalizeTitle(value: unknown): string | undefined {
