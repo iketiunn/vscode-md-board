@@ -1,7 +1,9 @@
 ---
 title: First release preparation
-status: Doing
-summary: Prepare the codebase for v0.1.0 release including documentation, examples, and basic polish
+status: Done
+summary: >-
+  Prepare the codebase for v0.1.0 release including documentation, examples, and
+  basic polish
 ---
 
 ## Description

@@ -1,7 +1,9 @@
 ---
 title: Add card summary preview
-status: Done
-summary: Display a brief summary of each card below the title to give context without opening the full card
+status: Doing
+summary: >-
+  Display a brief summary of each card below the title to give context without
+  opening the full card
 ---
 
 ## Description
