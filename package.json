@@ -1,7 +1,7 @@
 {
   "name": "md-board",
   "displayName": "Markdown Board",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "iketiunn",
   "description": "Visualize a folder of Markdown files as a Kanban board powered by frontmatter.",
   "author": {
