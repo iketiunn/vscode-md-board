@@ -81,9 +81,21 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 
 		if (message.type === 'createCard') {
 			const status = message.status?.trim() || DEFAULT_STATUS;
-			const fileName = await buildUniqueFileName(folderUri, status);
+			const title = await vscode.window.showInputBox({
+				title: 'Create Card',
+				prompt: 'Enter a title for the new card.',
+				placeHolder: 'Card title',
+				ignoreFocusOut: true,
+				validateInput: (value) => (value.trim().length > 0 ? null : 'Title is required.'),
+			});
+			if (!title) {
+				return;
+			}
+
+			const normalizedTitle = title.trim();
+			const fileName = await buildUniqueFileName(folderUri, normalizedTitle);
 			const fileUri = vscode.Uri.joinPath(folderUri, fileName);
-			const template = `---\ntitle: "Untitled"\nstatus: ${JSON.stringify(status)}\n---\n\n`;
+			const template = `---\ntitle: ${JSON.stringify(normalizedTitle)}\nstatus: ${JSON.stringify(status)}\n---\n\n`;
 
 			await vscode.workspace.fs.writeFile(fileUri, Buffer.from(template, 'utf8'));
 
@@ -111,8 +123,8 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 	});
 }
 
-async function buildUniqueFileName(folderUri: vscode.Uri, status: string): Promise<string> {
-	const normalized = status
+async function buildUniqueFileName(folderUri: vscode.Uri, title: string): Promise<string> {
+	const normalized = title
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '');

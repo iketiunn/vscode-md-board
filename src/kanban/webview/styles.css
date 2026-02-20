@@ -251,16 +251,19 @@ body.dragging * {
 	width: 26px;
 	height: 26px;
 	border-radius: 6px;
-	opacity: 0.42;
+	opacity: 0;
+	pointer-events: none;
 	cursor: pointer;
 	font-size: 13px;
 	transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
 .card:hover .card-menu-trigger,
+.card:focus-within .card-menu-trigger,
 .card-menu-trigger:focus-visible,
 .card-menu-open .card-menu-trigger {
 	opacity: 1;
+	pointer-events: auto;
 }
 
 .card-menu-trigger:hover {

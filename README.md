@@ -57,11 +57,11 @@ Implementation notes...
 
 ### New Card Template
 
-`Create` writes a new file with:
+`Create` now asks for a title and requires confirmation before writing a new file. The new file is created with:
 
 ```md
 ---
-title: "Untitled"
+title: "<your entered title>"
 status: "<column status>"
 ---
 ```

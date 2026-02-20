@@ -26,6 +26,11 @@
           "command": "extension.openFolderAsKanban",
           "when": "explorerResourceIsFolder",
           "group": "navigation@10"
+        },
+        {
+          "command": "extension.openFolderAsKanban",
+          "when": "explorerResourceIsRoot",
+          "group": "navigation@10"
         }
       ]
     }
