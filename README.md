@@ -4,6 +4,21 @@ Visualize a folder of Markdown files as a Kanban board in VS Code:.
 
 Each `.md` file with a `title` in frontmatter becomes a card; `status` determines the column.
 
+![Board View](./images/screenshot1.png)
+
+<details>
+<summary>More</summary>
+
+**Card Preview**
+
+![Card Preview](./images/screenshot2.png)
+
+**Edit Card**
+
+![Edit Card](./images/screenshot3.png)
+
+</details>
+
 ## Quick Start
 
 1. Right-click a folder in Explorer
@@ -23,7 +38,7 @@ Each `.md` file with a `title` in frontmatter becomes a card; `status` determine
 ---
 title: "Required card title"
 status: "Column name"  # Optional, defaults to Inbox 📥
-summary: "Subtitle"    # Optional
+summary: "Some text..."    # Optional
 ---
 ```
 
