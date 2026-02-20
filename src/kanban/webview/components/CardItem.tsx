@@ -1,7 +1,10 @@
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { createPortal } from 'preact/compat';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Dispatch, StateUpdater } from 'preact/hooks';
 import type { WebviewCard } from '../../types';
+import { cardDragId } from './dndIds';
 import type { MenuState } from './types';
 
 type CardItemProps = {
@@ -15,8 +18,6 @@ type CardItemProps = {
 	onOpenCard: (cardId: string) => void;
 	onEditCard: (cardId: string) => void;
 	onDeleteCard: (cardId: string) => void;
-	onCardDragStart: (cardId: string) => void;
-	onCardDragEnd: () => void;
 };
 
 export function CardItem({
@@ -29,10 +30,22 @@ export function CardItem({
 	onMoveCard,
 	onOpenCard,
 	onEditCard,
-	onDeleteCard,
-	onCardDragStart,
-	onCardDragEnd
+	onDeleteCard
 }: CardItemProps) {
+	const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+		id: cardDragId(card.id),
+		data: {
+			type: 'card',
+			cardId: card.id,
+			status: card.status,
+		},
+	});
+	const dragStyle = {
+		transform: CSS.Translate.toString(transform),
+		opacity: isDragging ? 0.5 : 1,
+	};
+	const draggableAttributes = attributes as unknown as Record<string, unknown>;
+	const draggableListeners = listeners as Record<string, unknown>;
 	const availableStatuses = columns.filter((value) => value !== card.status);
 	const isMenuOpen = menu?.cardId === card.id;
 	const isMoveOpen = isMenuOpen && Boolean(menu?.submenuOpen);
@@ -138,16 +151,11 @@ export function CardItem({
 		<article
 			key={card.id}
 			class={`card ${isMenuOpen ? 'card-menu-open' : ''}`}
-			draggable
+			ref={setNodeRef}
+			{...draggableAttributes}
+			{...draggableListeners}
+			style={dragStyle}
 			tabIndex={0}
-			onDragStart={(event) => {
-				event.dataTransfer?.setData('text/plain', card.id);
-				if (event.dataTransfer) {
-					event.dataTransfer.effectAllowed = 'move';
-				}
-				onCardDragStart(card.id);
-			}}
-			onDragEnd={onCardDragEnd}
 			onClick={() => {
 				if (!draggingCardId && !suppressOpenRef.current) {
 					setMenu(null);

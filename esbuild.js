@@ -48,6 +48,11 @@ const webviewBuild = {
 	format: 'iife',
 	platform: 'browser',
 	target: ['es2022'],
+	alias: {
+		react: 'preact/compat',
+		'react-dom': 'preact/compat',
+		'react/jsx-runtime': 'preact/jsx-runtime',
+	},
 	outfile: 'dist/webview/app.js',
 };
 

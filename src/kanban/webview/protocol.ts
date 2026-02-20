@@ -31,9 +31,15 @@ export type DeleteCardMessage = {
 	id: string;
 };
 
+export type ReorderColumnsMessage = {
+	type: 'reorderColumns';
+	columns: string[];
+};
+
 export type WebviewToHostMessage =
 	| MoveCardMessage
 	| OpenCardMessage
 	| EditCardMessage
 	| CreateCardMessage
-	| DeleteCardMessage;
+	| DeleteCardMessage
+	| ReorderColumnsMessage;

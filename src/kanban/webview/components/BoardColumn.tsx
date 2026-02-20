@@ -1,7 +1,10 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Dispatch, StateUpdater } from 'preact/hooks';
 import { DEFAULT_STATUS } from '../../constants';
 import type { WebviewCard } from '../../types';
 import { CardItem } from './CardItem';
+import { columnDragId } from './dndIds';
 import type { MenuState } from './types';
 
 type BoardColumnProps = {
@@ -10,6 +13,7 @@ type BoardColumnProps = {
 	columns: string[];
 	menu: MenuState | null;
 	draggingCardId: string | null;
+	draggingColumnStatus: string | null;
 	suppressOpenRef: { current: boolean };
 	setMenu: Dispatch<StateUpdater<MenuState | null>>;
 	onMoveCard: (cardId: string, nextStatus: string) => void;
@@ -17,8 +21,6 @@ type BoardColumnProps = {
 	onEditCard: (cardId: string) => void;
 	onDeleteCard: (cardId: string) => void;
 	onCreateCard: (status: string) => void;
-	onCardDragStart: (cardId: string) => void;
-	onCardDragEnd: () => void;
 };
 
 export function BoardColumn({
@@ -27,19 +29,49 @@ export function BoardColumn({
 	columns,
 	menu,
 	draggingCardId,
+	draggingColumnStatus,
 	suppressOpenRef,
 	setMenu,
 	onMoveCard,
 	onOpenCard,
 	onEditCard,
 	onDeleteCard,
-	onCreateCard,
-	onCardDragStart,
-	onCardDragEnd
+	onCreateCard
 }: BoardColumnProps) {
+	const isInbox = status === DEFAULT_STATUS;
+	const isColumnBeingDragged = draggingColumnStatus === status;
+	const {
+		setNodeRef: setSortableNodeRef,
+		attributes,
+		listeners,
+		transform,
+		transition,
+	} = useSortable({
+		id: columnDragId(status),
+		data: {
+			type: 'column',
+			status,
+		},
+		disabled: isInbox,
+	});
+	const sortableStyle = {
+		transform: CSS.Transform.toString(transform),
+		transition,
+	};
+	const sortableAttributes = attributes as unknown as Record<string, unknown>;
+	const sortableListeners = listeners as Record<string, unknown>;
+
 	return (
-		<section class={`column ${status === DEFAULT_STATUS ? 'column-inbox' : ''}`}>
-			<header class="column-header">
+		<section
+			class={`column ${isInbox ? 'column-inbox' : ''} ${isColumnBeingDragged ? 'column-dragging' : ''}`}
+			ref={setSortableNodeRef}
+			style={sortableStyle}
+		>
+			<header
+				class={`column-header ${isInbox ? '' : 'column-header-draggable'}`}
+				{...(!isInbox ? sortableAttributes : {})}
+				{...(!isInbox ? sortableListeners : {})}
+			>
 				<h2>{status}</h2>
 				<div class="column-header-actions">
 					<button class="column-create-button" type="button" onClick={() => onCreateCard(status)}>
@@ -48,25 +80,7 @@ export function BoardColumn({
 					<span>{cards.length}</span>
 				</div>
 			</header>
-			<div
-				class="column-body"
-				onDragOver={(event) => {
-					event.preventDefault();
-					if (event.dataTransfer) {
-						event.dataTransfer.dropEffect = 'move';
-					}
-				}}
-				onDrop={(event) => {
-					event.preventDefault();
-					const cardId = event.dataTransfer?.getData('text/plain');
-					if (!cardId) {
-						return;
-					}
-
-					setMenu(null);
-					onMoveCard(cardId, status);
-				}}
-			>
+			<div class="column-body">
 				{cards.map((card) => (
 					<CardItem
 						key={card.id}
@@ -76,13 +90,11 @@ export function BoardColumn({
 						draggingCardId={draggingCardId}
 						suppressOpenRef={suppressOpenRef}
 						setMenu={setMenu}
-							onMoveCard={onMoveCard}
-							onOpenCard={onOpenCard}
-							onEditCard={onEditCard}
-							onDeleteCard={onDeleteCard}
-							onCardDragStart={onCardDragStart}
-							onCardDragEnd={onCardDragEnd}
-						/>
+						onMoveCard={onMoveCard}
+						onOpenCard={onOpenCard}
+						onEditCard={onEditCard}
+						onDeleteCard={onDeleteCard}
+					/>
 				))}
 			</div>
 		</section>

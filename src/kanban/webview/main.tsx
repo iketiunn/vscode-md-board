@@ -1,3 +1,6 @@
+import type { CollisionDetection, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { closestCenter, DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { render } from 'preact';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { DEFAULT_STATUS } from '../constants';
@@ -6,6 +9,7 @@ import type { HostToWebviewMessage, WebviewToHostMessage } from './protocol';
 import { BoardColumn } from './components/BoardColumn';
 import { BoardHeader } from './components/BoardHeader';
 import { BoardScrollbar } from './components/BoardScrollbar';
+import { columnDragId, parseCardDragId, parseColumnDragId } from './components/dndIds';
 import type { MenuState } from './components/types';
 import { useBoardScrollbar } from './hooks/useBoardScrollbar';
 import './styles.css';
@@ -21,12 +25,28 @@ declare global {
 }
 
 const vscode = acquireVsCodeApi();
+const DndContextCompat = DndContext as unknown as (props: Record<string, unknown>) => JSX.Element;
+const SortableContextCompat = SortableContext as unknown as (props: Record<string, unknown>) => JSX.Element;
+const DragOverlayCompat = DragOverlay as unknown as (props: Record<string, unknown>) => JSX.Element;
+const pointerThenCenterCollision: CollisionDetection = (args) => {
+	const pointerCollisions = pointerWithin(args);
+	return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args);
+};
 
 function App() {
 	const [board, setBoard] = useState<BoardPayload>(window.__MD_BOARD_INITIAL_STATE__);
 	const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+	const [draggingColumnStatus, setDraggingColumnStatus] = useState<string | null>(null);
+	const [dragOverlayCard, setDragOverlayCard] = useState<WebviewCard | null>(null);
 	const [menu, setMenu] = useState<MenuState | null>(null);
 	const suppressOpenRef = useRef(false);
+	const sensors = useSensors(
+		useSensor(PointerSensor, {
+			activationConstraint: {
+				distance: 6,
+			},
+		})
+	);
 
 	const columns = useMemo(
 		() => {
@@ -48,6 +68,21 @@ function App() {
 			grouped[card.status].push(card);
 		}
 		return grouped;
+	}, [board.cards]);
+	const sortableColumnIds = useMemo(() => columns.map((status) => columnDragId(status)), [columns]);
+	const cardStatusById = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const card of board.cards) {
+			map.set(card.id, card.status);
+		}
+		return map;
+	}, [board.cards]);
+	const cardById = useMemo(() => {
+		const map = new Map<string, WebviewCard>();
+		for (const card of board.cards) {
+			map.set(card.id, card);
+		}
+		return map;
 	}, [board.cards]);
 
 	const {
@@ -80,13 +115,13 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		if (draggingCardId) {
+		if (draggingCardId || draggingColumnStatus) {
 			document.body.classList.add('dragging');
 			return;
 		}
 
 		document.body.classList.remove('dragging');
-	}, [draggingCardId]);
+	}, [draggingCardId, draggingColumnStatus]);
 
 	const moveCard = useCallback((cardId: string, nextStatus: string) => {
 		setBoard((previous) => {
@@ -119,42 +154,153 @@ function App() {
 		vscode.postMessage({ type: 'createCard', status });
 	}, []);
 
-	const onCardDragStart = useCallback((cardId: string) => {
-		suppressOpenRef.current = true;
-		setDraggingCardId(cardId);
-	}, []);
-
 	const onCardDragEnd = useCallback(() => {
 		setDraggingCardId(null);
+		setDragOverlayCard(null);
 		setTimeout(() => {
 			suppressOpenRef.current = false;
 		}, 0);
 	}, []);
 
+	const reorderColumns = useCallback((draggedStatus: string, targetStatus: string) => {
+		let nextColumnsForSave: string[] | undefined;
+		setBoard((previous) => {
+			if (draggedStatus === DEFAULT_STATUS) {
+				return previous;
+			}
+			const nonDefault = previous.columns.filter((status) => status !== DEFAULT_STATUS);
+			const sourceIndex = nonDefault.indexOf(draggedStatus);
+			if (sourceIndex < 0) {
+				return previous;
+			}
+			const targetIndex = targetStatus === DEFAULT_STATUS ? 0 : nonDefault.indexOf(targetStatus);
+			if (targetIndex < 0 || sourceIndex === targetIndex) {
+				return previous;
+			}
+			const moved = arrayMove(nonDefault, sourceIndex, targetIndex);
+			const pinnedColumns = moved.filter((status) => status !== DEFAULT_STATUS);
+			const columns = [DEFAULT_STATUS, ...pinnedColumns];
+			nextColumnsForSave = columns;
+			return { ...previous, columns };
+		});
+		if (nextColumnsForSave) {
+			vscode.postMessage({ type: 'reorderColumns', columns: nextColumnsForSave });
+		}
+	}, []);
+
+	const onColumnDragEnd = useCallback(() => {
+		setDraggingColumnStatus(null);
+	}, []);
+
+	const onDragStart = useCallback((event: DragStartEvent) => {
+		const activeId = String(event.active.id);
+		const cardId = parseCardDragId(activeId);
+		if (cardId) {
+			suppressOpenRef.current = true;
+			setDraggingCardId(cardId);
+			setDragOverlayCard(cardById.get(cardId) ?? null);
+			setMenu(null);
+			return;
+		}
+
+		const columnStatus = parseColumnDragId(activeId);
+		if (columnStatus) {
+			setDraggingColumnStatus(columnStatus);
+			setMenu(null);
+		}
+	}, [cardById]);
+
+	const onDragCancel = useCallback(() => {
+		onCardDragEnd();
+		onColumnDragEnd();
+	}, [onCardDragEnd, onColumnDragEnd]);
+
+	const resolveDropStatus = useCallback((event: DragEndEvent): string | undefined => {
+		const over = event.over;
+		if (!over) {
+			return undefined;
+		}
+
+		const overId = String(over.id);
+		const fromColumnIds = parseColumnDragId(overId);
+		if (fromColumnIds) {
+			return fromColumnIds;
+		}
+
+		const overCardId = parseCardDragId(overId);
+		if (overCardId) {
+			return cardStatusById.get(overCardId);
+		}
+
+		const maybeStatus = (over.data.current as { status?: unknown } | undefined)?.status;
+		return typeof maybeStatus === 'string' ? maybeStatus : undefined;
+	}, [cardStatusById]);
+
+	const onDragEnd = useCallback((event: DragEndEvent) => {
+		const activeId = String(event.active.id);
+		const targetStatus = resolveDropStatus(event);
+		const draggedCardId = parseCardDragId(activeId);
+		if (draggedCardId) {
+			if (targetStatus) {
+				moveCard(draggedCardId, targetStatus);
+			}
+			onCardDragEnd();
+			return;
+		}
+
+		const draggedStatus = parseColumnDragId(activeId);
+		if (!draggedStatus) {
+			onColumnDragEnd();
+			return;
+		}
+
+		if (targetStatus && targetStatus !== draggedStatus) {
+			reorderColumns(draggedStatus, targetStatus);
+		}
+		onColumnDragEnd();
+	}, [moveCard, onCardDragEnd, onColumnDragEnd, reorderColumns, resolveDropStatus]);
+
 	return (
 		<div class="app-shell">
 			<BoardHeader folderName={board.folderName} folderPath={board.folderPath} />
-			<main ref={boardRef} class="board" onScroll={() => setMenu(null)}>
-				{columns.map((status) => (
-					<BoardColumn
-						key={status}
-						status={status}
-						cards={cardsByStatus[status] ?? []}
-						columns={columns}
-						menu={menu}
-						draggingCardId={draggingCardId}
-						suppressOpenRef={suppressOpenRef}
-						setMenu={setMenu}
-						onMoveCard={moveCard}
-						onOpenCard={openCard}
-						onEditCard={editCard}
-						onDeleteCard={deleteCard}
-						onCreateCard={createCard}
-						onCardDragStart={onCardDragStart}
-						onCardDragEnd={onCardDragEnd}
-					/>
-				))}
-			</main>
+			<DndContextCompat
+				sensors={sensors}
+				collisionDetection={pointerThenCenterCollision}
+				onDragStart={onDragStart}
+				onDragEnd={onDragEnd}
+				onDragCancel={onDragCancel}
+			>
+				<main ref={boardRef} class="board" onScroll={() => setMenu(null)}>
+					<SortableContextCompat items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
+						{columns.map((status) => (
+							<BoardColumn
+								key={status}
+								status={status}
+								cards={cardsByStatus[status] ?? []}
+								columns={columns}
+								menu={menu}
+								draggingCardId={draggingCardId}
+								draggingColumnStatus={draggingColumnStatus}
+								suppressOpenRef={suppressOpenRef}
+								setMenu={setMenu}
+								onMoveCard={moveCard}
+								onOpenCard={openCard}
+								onEditCard={editCard}
+								onDeleteCard={deleteCard}
+								onCreateCard={createCard}
+							/>
+						))}
+					</SortableContextCompat>
+				</main>
+				<DragOverlayCompat>
+					{dragOverlayCard ? (
+						<article class="card card-drag-overlay">
+							<p class="card-title">{dragOverlayCard.title}</p>
+							{dragOverlayCard.summary ? <p class="card-summary">{dragOverlayCard.summary}</p> : null}
+						</article>
+					) : null}
+				</DragOverlayCompat>
+			</DndContextCompat>
 			<BoardScrollbar
 				trackRef={trackRef}
 				hasHorizontalOverflow={hasHorizontalOverflow}

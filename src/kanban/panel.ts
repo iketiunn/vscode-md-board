@@ -24,14 +24,20 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 
 	const refresh = async () => {
 		const cards = await loadCards(folderUri);
-		const payload = toBoardPayload(cards, folderUri);
+		const payload = withColumnOrder(
+			toBoardPayload(cards, folderUri),
+			await readColumnOrder(context, folderUri)
+		);
 		panel.webview.postMessage({ type: 'refresh', payload });
 	};
 
 	const initialCards = await loadCards(folderUri);
 	panel.webview.html = getWebviewHtml(
 		panel.webview,
-		toBoardPayload(initialCards, folderUri),
+		withColumnOrder(
+			toBoardPayload(initialCards, folderUri),
+			await readColumnOrder(context, folderUri)
+		),
 		webviewScriptUri,
 		webviewStyleUri
 	);
@@ -120,7 +126,70 @@ export async function openFolderAsKanban(context: vscode.ExtensionContext, folde
 			await vscode.workspace.fs.delete(fileUri, { useTrash: true });
 			await refresh();
 		}
+
+		if (message.type === 'reorderColumns') {
+			const cards = await loadCards(folderUri);
+			const currentColumns = toBoardPayload(cards, folderUri).columns;
+			const nextOrder = normalizeColumnOrder(message.columns, currentColumns);
+			await writeColumnOrder(context, folderUri, nextOrder);
+			await refresh();
+		}
 	});
+}
+
+function getColumnOrderKey(folderUri: vscode.Uri): string {
+	return `mdBoard:columnOrder:${folderUri.fsPath}`;
+}
+
+async function readColumnOrder(context: vscode.ExtensionContext, folderUri: vscode.Uri): Promise<string[] | undefined> {
+	const value = context.workspaceState.get<unknown>(getColumnOrderKey(folderUri));
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+
+	const normalized = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+	return normalized.length > 0 ? normalized : undefined;
+}
+
+async function writeColumnOrder(
+	context: vscode.ExtensionContext,
+	folderUri: vscode.Uri,
+	columns: string[]
+): Promise<void> {
+	await context.workspaceState.update(getColumnOrderKey(folderUri), columns);
+}
+
+function withColumnOrder(payload: ReturnType<typeof toBoardPayload>, savedOrder: string[] | undefined) {
+	return {
+		...payload,
+		columns: normalizeColumnOrder(savedOrder ?? payload.columns, payload.columns),
+	};
+}
+
+function normalizeColumnOrder(candidateOrder: string[], discoveredColumns: string[]): string[] {
+	const dedupedCandidate = dedupe(candidateOrder);
+	const dedupedDiscovered = dedupe(discoveredColumns);
+	const discoveredSet = new Set(dedupedDiscovered);
+	const merged = dedupedCandidate.filter((status) => discoveredSet.has(status));
+
+	for (const status of dedupedDiscovered) {
+		if (!merged.includes(status)) {
+			merged.push(status);
+		}
+	}
+
+	const withoutDefault = merged.filter((status) => status !== DEFAULT_STATUS);
+	return [DEFAULT_STATUS, ...withoutDefault];
+}
+
+function dedupe(values: string[]): string[] {
+	const result: string[] = [];
+	for (const value of values) {
+		if (!result.includes(value)) {
+			result.push(value);
+		}
+	}
+	return result;
 }
 
 async function buildUniqueFileName(folderUri: vscode.Uri, title: string): Promise<string> {

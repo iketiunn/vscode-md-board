@@ -122,6 +122,10 @@ body.dragging * {
 	box-shadow: var(--shadow);
 }
 
+.column-dragging {
+	opacity: 0.55;
+}
+
 .column-inbox {
 	background: var(--panel-muted);
 }
@@ -132,6 +136,10 @@ body.dragging * {
 	align-items: center;
 	padding: 12px 14px;
 	border-bottom: 1px solid #e4e4e7;
+}
+
+.column-header-draggable {
+	cursor: grab;
 }
 
 .column-header h2 {
@@ -210,6 +218,14 @@ body.dragging * {
 	box-shadow: var(--shadow);
 	cursor: pointer;
 	transition: transform 120ms ease, border-color 140ms ease, box-shadow 180ms ease;
+}
+
+.card-drag-overlay {
+	width: 296px;
+	max-width: min(296px, calc(100vw - 32px));
+	pointer-events: none;
+	z-index: 9999;
+	box-shadow: 0 14px 30px rgba(24, 24, 27, 0.22);
 }
 
 .card:hover {
